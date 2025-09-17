@@ -3,6 +3,7 @@ import SongInfo from './SongInfo';
 // @ts-ignore: No type definitions for 'jsmediatags'
 import jsmediatags from "jsmediatags/dist/jsmediatags.min.js";
 import { generatePhoneticLyrics } from './services/aiPhonetic';
+import AiResultDisplay from './AiResultDisplay';
 
 interface LrcLine {
   time: number;
@@ -22,6 +23,10 @@ const LrcKaraoke: React.FC = () => {
   // Estado de letras
   const [lyrics, setLyrics] = useState<LrcLine[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState<number>(0);
+
+  // Estados para la generación fonética con IA
+  const [isGeneratingPhonetic, setIsGeneratingPhonetic] = useState<boolean>(false);
+  const [phoneticTextResult, setPhoneticTextResult] = useState<string>('');
 
   // Metadatos de la canción
   const [songMeta, setSongMeta] = useState<{
@@ -144,37 +149,46 @@ const LrcKaraoke: React.FC = () => {
   };
 
   const handleGeneratePhonetic = async () => {
-    const english = lyrics.map(l => l.text).join('\n');
-    const phonetic = await generatePhoneticLyrics(english);
-    console.log(phonetic); // Aquí puedes parsear y crear tu .lrc fonético
+    if (lyrics.length === 0) {
+      alert("Carga un archivo .lrc primero para generar la fonética.");
+      return;
+    }
+
+    setIsGeneratingPhonetic(true);
+    setPhoneticTextResult(''); // Clear previous result
+
+    try {
+      const english = lyrics.map(l => l.text).join('\n');
+      const phonetic = await generatePhoneticLyrics(english);
+      setPhoneticTextResult(phonetic);
+    } catch (error) {
+      console.error("Error generating phonetic lyrics:", error);
+      alert("Hubo un error al generar la fonética. Inténtalo de nuevo.");
+    } finally {
+      setIsGeneratingPhonetic(false);
+    }
   };
 
-  // Descargar .lrc con fonética
-  const handleDownloadPhoneticLrc = () => {
-    if (lyrics.length === 0) {
-      alert("No hay letras para descargar.");
+  const handleDownloadPhonetic = () => {
+    if (!phoneticTextResult) {
+      alert("No hay fonética generada para descargar.");
       return;
     }
 
     let lrcContent = "";
-
-    // Opcional: agregar encabezados si existen
     if (songMeta.title) lrcContent += `[ti:${songMeta.title}]\n`;
     if (songMeta.artist) lrcContent += `[ar:${songMeta.artist}]\n`;
-
     lrcContent += "\n";
 
-    lyrics.forEach(line => {
+    const phoneticLines = phoneticTextResult.split('\n');
+    lyrics.forEach((line, index) => {
       const minutes = Math.floor(line.time / 60);
-      const seconds = (line.time % 60).toFixed(3).padStart(6, '0'); // Asegura formato mm:ss.SSS
+      const seconds = (line.time % 60).toFixed(3).padStart(6, '0');
       const timeTag = `[${minutes.toString().padStart(2, '0')}:${seconds}]`;
 
-      // Línea principal
       lrcContent += `${timeTag}${line.text}\n`;
-
-      // Si tiene pronunciación, agregarla con el mismo timestamp
-      if (line.pronunciation) {
-        lrcContent += `${timeTag}${line.pronunciation}\n`;
+      if (phoneticLines[index]) {
+        lrcContent += `${timeTag}${phoneticLines[index]}\n`;
       }
     });
 
@@ -189,7 +203,21 @@ const LrcKaraoke: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Metadatos de la canción
+  const handleReplaceWithPhonetic = () => {
+    if (!phoneticTextResult) {
+      alert("No hay fonética generada para reemplazar.");
+      return;
+    }
+
+    const phoneticLines = phoneticTextResult.split('\n');
+    const updatedLyrics: LrcLine[] = lyrics.map((line, index) => ({
+      ...line,
+      pronunciation: phoneticLines[index] || undefined,
+    }));
+    setLyrics(updatedLyrics);
+  };
+
+  // Sincronización de la letra
 
   // Sincronización de la letra
   const animate = () => {
@@ -441,7 +469,8 @@ const LrcKaraoke: React.FC = () => {
           </label>
           <button
             onClick={handleGeneratePhonetic}
-            className="inline-flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in"
+            disabled={isGeneratingPhonetic || lyrics.length === 0}
+            className={`inline-flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in ${isGeneratingPhonetic || lyrics.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -449,6 +478,12 @@ const LrcKaraoke: React.FC = () => {
             Generar Fonética (AI)
           </button>
         </div>
+        <AiResultDisplay
+          isLoading={isGeneratingPhonetic}
+          phoneticText={phoneticTextResult}
+          onDownload={handleDownloadPhonetic}
+          onReplace={handleReplaceWithPhonetic}
+        />
       </div>
       {/* Hidden Audio Element */}
       <audio ref={audioRef} src={audioUrl ?? undefined} onEnded={() => setIsPlaying(false)} />
