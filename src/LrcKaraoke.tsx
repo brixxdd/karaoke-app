@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import SongInfo from './SongInfo';
 // @ts-ignore: No type definitions for 'jsmediatags'
 import jsmediatags from "jsmediatags/dist/jsmediatags.min.js";
+import { generatePhoneticLyrics } from './services/aiPhonetic';
 
 interface LrcLine {
   time: number;
@@ -9,15 +10,18 @@ interface LrcLine {
   pronunciation?: string;
 }
 
-export default function LrcKaraoke() {
+const LrcKaraoke: React.FC = () => {
+  // Estados de audio y metadatos
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [duration, setDuration] = useState<number>(0);
+
+  // Estado de letras
   const [lyrics, setLyrics] = useState<LrcLine[]>([]);
-  const [currentLineIndex, setCurrentLineIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
+  const [currentLineIndex, setCurrentLineIndex] = useState<number>(0);
 
   // Metadatos de la canción
   const [songMeta, setSongMeta] = useState<{
@@ -33,19 +37,15 @@ export default function LrcKaraoke() {
   const rafId = useRef<number | null>(null);
 
   // Parseo eficiente de .lrc
-  function parseLRC(lrcText: string): LrcLine[] {
+  function parseLRC(lrcText: string): LrcLine[] { // ✅ Corregido: retorna LrcLine[]
     const lines = lrcText.split('\n');
-    const result: LrcLine[] = [];
+    const tempLines: { time: number; text: string; rawLine: string }[] = [];
+
     for (const line of lines) {
-      // Extrae todos los tiempos de la línea
-      const timeTags = [...line.matchAll(/\[(\d{2}):(\d{2}(?:\.\d{1,2})?)\]/g)];
-      const text = line.replace(/\[(\d{2}):(\d{2}(?:\.\d{1,2})?)\]/g, '').trim();
-      for (const tag of timeTags) {
-        const min = parseInt(tag[1], 10);
-        const sec = parseFloat(tag[2]);
-        const time = min * 60 + sec;
-        if (
-          text &&
+      const timeTags = [...line.matchAll(/\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g)]; // Allow up to 3 decimal places for milliseconds
+      const text = line.replace(/\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g, '').trim();
+
+      if (text &&
           !text.startsWith('RCLyricsBand') &&
           !text.startsWith('by:') &&
           !text.startsWith('ti:') &&
@@ -55,9 +55,31 @@ export default function LrcKaraoke() {
           !text.startsWith('length:') &&
           !text.startsWith('re:') &&
           !text.startsWith('ve:')
-        ) {
-          result.push({ time, text });
+      ) {
+        for (const tag of timeTags) {
+          const min = parseInt(tag[1], 10);
+          const sec = parseFloat(tag[2]);
+          const time = min * 60 + sec;
+          tempLines.push({ time, text, rawLine: line });
         }
+      }
+    }
+
+    // Sort by time to ensure correct pairing
+    tempLines.sort((a, b) => a.time - b.time);
+
+    const result: LrcLine[] = [];
+    for (let i = 0; i < tempLines.length; i++) {
+      const current = tempLines[i];
+      const next = tempLines[i + 1];
+
+      if (next && current.time === next.time) {
+        // Assume current is the main lyric and next is the pronunciation
+        result.push({ time: current.time, text: current.text, pronunciation: next.text });
+        i++; // Skip the next line as it's already processed
+      } else {
+        // Single lyric line or the last line
+        result.push({ time: current.time, text: current.text });
       }
     }
     console.log('Líneas parseadas:', result.length);
@@ -120,6 +142,54 @@ export default function LrcKaraoke() {
       reader.readAsText(file);
     }
   };
+
+  const handleGeneratePhonetic = async () => {
+    const english = lyrics.map(l => l.text).join('\n');
+    const phonetic = await generatePhoneticLyrics(english);
+    console.log(phonetic); // Aquí puedes parsear y crear tu .lrc fonético
+  };
+
+  // Descargar .lrc con fonética
+  const handleDownloadPhoneticLrc = () => {
+    if (lyrics.length === 0) {
+      alert("No hay letras para descargar.");
+      return;
+    }
+
+    let lrcContent = "";
+
+    // Opcional: agregar encabezados si existen
+    if (songMeta.title) lrcContent += `[ti:${songMeta.title}]\n`;
+    if (songMeta.artist) lrcContent += `[ar:${songMeta.artist}]\n`;
+
+    lrcContent += "\n";
+
+    lyrics.forEach(line => {
+      const minutes = Math.floor(line.time / 60);
+      const seconds = (line.time % 60).toFixed(3).padStart(6, '0'); // Asegura formato mm:ss.SSS
+      const timeTag = `[${minutes.toString().padStart(2, '0')}:${seconds}]`;
+
+      // Línea principal
+      lrcContent += `${timeTag}${line.text}\n`;
+
+      // Si tiene pronunciación, agregarla con el mismo timestamp
+      if (line.pronunciation) {
+        lrcContent += `${timeTag}${line.pronunciation}\n`;
+      }
+    });
+
+    const blob = new Blob([lrcContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${songMeta.title || 'cancion'}_fonetico.lrc`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Metadatos de la canción
 
   // Sincronización de la letra
   const animate = () => {
@@ -317,15 +387,16 @@ export default function LrcKaraoke() {
                 return (
                   <div
                     key={realIdx}
-                    className={`transition-all duration-300 ease-in-out text-center px-4 py-2 rounded-lg ${
-                      realIdx === currentLineIndex
+                    className={`transition-all duration-300 ease-in-out text-center px-4 py-2 rounded-lg ${realIdx === currentLineIndex
                         ? 'text-xl sm:text-2xl font-bold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/30 shadow-md transform scale-105 animate-pulse-glow lyric-active'
                         : realIdx === currentLineIndex - 1 || realIdx === currentLineIndex + 1
-                        ? 'text-lg sm:text-xl text-gray-600 dark:text-gray-300 opacity-80 animate-slide-in'
-                        : 'text-base sm:text-lg text-gray-500 dark:text-gray-400 opacity-60'
-                    }`}
+                            ? 'text-lg sm:text-xl text-gray-600 dark:text-gray-300 opacity-80 animate-slide-in'
+                            : 'text-base sm:text-lg text-gray-500 dark:text-gray-400 opacity-60'}`}
                   >
-                    {line.text}
+                    <p>{line.text}</p>
+                    {line.pronunciation && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{line.pronunciation}</p>
+                    )}
                   </div>
                 );
               })
@@ -368,10 +439,21 @@ export default function LrcKaraoke() {
             </svg>
             Elegir archivo .lrc
           </label>
+          <button
+            onClick={handleGeneratePhonetic}
+            className="inline-flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            Generar Fonética (AI)
+          </button>
         </div>
       </div>
       {/* Hidden Audio Element */}
       <audio ref={audioRef} src={audioUrl ?? undefined} onEnded={() => setIsPlaying(false)} />
     </div>
   );
-} 
+};
+
+export default LrcKaraoke;
