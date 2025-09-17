@@ -6,6 +6,7 @@ import jsmediatags from "jsmediatags/dist/jsmediatags.min.js";
 interface LrcLine {
   time: number;
   text: string;
+  pronunciation?: string;
 }
 
 export default function LrcKaraoke() {
