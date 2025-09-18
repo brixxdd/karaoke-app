@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import SongInfo from './SongInfo';
 // @ts-ignore: No type definitions for 'jsmediatags'
 import jsmediatags from "jsmediatags/dist/jsmediatags.min.js";
-import { generatePhoneticLyrics } from './services/aiPhonetic';
+import { generateSrtToLrcAndPhonetic } from './services/aiPhonetic';
 import AiResultDisplay from './AiResultDisplay';
 
 interface LrcLine {
@@ -39,6 +39,7 @@ const LrcKaraoke: React.FC = () => {
   }>({});
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const srtFileInputRef = useRef<HTMLInputElement>(null); // Ref for hidden SRT file input
   const rafId = useRef<number | null>(null);
 
   // Parseo eficiente de .lrc
@@ -88,6 +89,61 @@ const LrcKaraoke: React.FC = () => {
       }
     }
     console.log('Líneas parseadas:', result.length);
+    return result;
+  }
+
+  // Parseo de .srt a LrcLine[]
+  function parseSRT(srtText: string): LrcLine[] {
+    const lines = srtText.split('\n');
+    const result: LrcLine[] = [];
+    let currentTimestamp = 0;
+    let currentTextLines: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+
+      if (!line) { // Empty line, usually separates blocks
+        if (currentTextLines.length > 0 && currentTimestamp > 0) {
+          result.push({ time: currentTimestamp, text: currentTextLines.join(' ') });
+        }
+        currentTextLines = [];
+        currentTimestamp = 0;
+        continue;
+      }
+
+      // Check if it's a sequence number
+      if (/^\d+$/.test(line)) {
+        // If we have collected text and a timestamp, push it before starting a new block
+        if (currentTextLines.length > 0 && currentTimestamp > 0) {
+          result.push({ time: currentTimestamp, text: currentTextLines.join(' ') });
+        }
+        currentTextLines = [];
+        currentTimestamp = 0;
+        continue;
+      }
+
+      // Check for timestamp line (e.g., 00:00:01,000 --> 00:00:04,000)
+      const timeMatch = line.match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+      if (timeMatch) {
+        if (currentTextLines.length > 0 && currentTimestamp > 0) {
+          result.push({ time: currentTimestamp, text: currentTextLines.join(' ') });
+        }
+        const startMin = parseInt(timeMatch[2], 10);
+        const startSec = parseInt(timeMatch[3], 10);
+        const startMs = parseInt(timeMatch[4], 10);
+        currentTimestamp = startMin * 60 + startSec + startMs / 1000;
+        currentTextLines = []; // Reset text lines for the new timestamp
+      } else {
+        // It's a text line
+        currentTextLines.push(line);
+      }
+    }
+
+    // Push any remaining collected text after the loop finishes
+    if (currentTextLines.length > 0 && currentTimestamp > 0) {
+      result.push({ time: currentTimestamp, text: currentTextLines.join(' ') });
+    }
+
     return result;
   }
 
@@ -148,25 +204,43 @@ const LrcKaraoke: React.FC = () => {
     }
   };
 
-  const handleGeneratePhonetic = async () => {
-    if (lyrics.length === 0) {
-      alert("Carga un archivo .lrc primero para generar la fonética.");
-      return;
-    }
+  const handleSrtFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     setIsGeneratingPhonetic(true);
-    setPhoneticTextResult(''); // Clear previous result
+    setPhoneticTextResult('');
+    setLyrics([]); // Clear existing lyrics
 
     try {
-      const english = lyrics.map(l => l.text).join('\n');
-      const phonetic = await generatePhoneticLyrics(english);
-      setPhoneticTextResult(phonetic);
+      const srtText = await file.text();
+      const aiResponse = await generateSrtToLrcAndPhonetic(srtText);
+
+      if (!aiResponse) {
+        alert("La IA no pudo generar la fonética.");
+        setIsGeneratingPhonetic(false);
+        return;
+      }
+
+      const parsedLyrics = parseLRC(aiResponse);
+      if (parsedLyrics.length === 0) {
+        alert("No se pudieron extraer letras del resultado de la IA.");
+        setIsGeneratingPhonetic(false);
+        return;
+      }
+      setLyrics(parsedLyrics);
+      setPhoneticTextResult(aiResponse); // Store the raw AI response for download if needed
+
     } catch (error) {
-      console.error("Error generating phonetic lyrics:", error);
-      alert("Hubo un error al generar la fonética. Inténtalo de nuevo.");
+      console.error("Error processing SRT or generating phonetic lyrics:", error);
+      alert("Hubo un error al procesar el archivo SRT o generar la fonética.");
     } finally {
       setIsGeneratingPhonetic(false);
     }
+  };
+
+  const handleGeneratePhonetic = async () => {
+    srtFileInputRef.current?.click(); // Trigger file input click
   };
 
   const handleDownloadPhonetic = () => {
@@ -175,24 +249,7 @@ const LrcKaraoke: React.FC = () => {
       return;
     }
 
-    let lrcContent = "";
-    if (songMeta.title) lrcContent += `[ti:${songMeta.title}]\n`;
-    if (songMeta.artist) lrcContent += `[ar:${songMeta.artist}]\n`;
-    lrcContent += "\n";
-
-    const phoneticLines = phoneticTextResult.split('\n');
-    lyrics.forEach((line, index) => {
-      const minutes = Math.floor(line.time / 60);
-      const seconds = (line.time % 60).toFixed(3).padStart(6, '0');
-      const timeTag = `[${minutes.toString().padStart(2, '0')}:${seconds}]`;
-
-      lrcContent += `${timeTag}${line.text}\n`;
-      if (phoneticLines[index]) {
-        lrcContent += `${timeTag}${phoneticLines[index]}\n`;
-      }
-    });
-
-    const blob = new Blob([lrcContent], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([phoneticTextResult], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -209,10 +266,11 @@ const LrcKaraoke: React.FC = () => {
       return;
     }
 
-    const phoneticLines = phoneticTextResult.split('\n');
-    const updatedLyrics: LrcLine[] = lyrics.map((line, index) => ({
-      ...line,
-      pronunciation: phoneticLines[index] || undefined,
+    const parsedAiResult = parseLRC(phoneticTextResult);
+    const updatedLyrics: LrcLine[] = parsedAiResult.map(line => ({
+      time: line.time,
+      text: line.pronunciation || line.text, // Phonetic becomes primary
+      pronunciation: line.pronunciation ? line.text : undefined, // Original becomes secondary
     }));
     setLyrics(updatedLyrics);
   };
@@ -467,15 +525,23 @@ const LrcKaraoke: React.FC = () => {
             </svg>
             Elegir archivo .lrc
           </label>
+          <input
+            type="file"
+            accept=".srt"
+            onChange={handleSrtFileUpload}
+            className="hidden"
+            id="srt-upload"
+            ref={srtFileInputRef}
+          />
           <button
             onClick={handleGeneratePhonetic}
-            disabled={isGeneratingPhonetic || lyrics.length === 0}
-            className={`inline-flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in ${isGeneratingPhonetic || lyrics.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={isGeneratingPhonetic}
+            className={`inline-flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in ${isGeneratingPhonetic ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
-            Generar Fonética (AI)
+            Generar Fonética (SRT)
           </button>
         </div>
         <AiResultDisplay
