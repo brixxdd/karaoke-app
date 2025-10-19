@@ -4,16 +4,25 @@ export async function generateSrtToLrcAndPhonetic(srtContent: string): Promise<s
   const prompt = `You will receive the full text of a SubRip (.srt) file.
 
 Task:
-1. Convert it to standard LRC format:
-   - Replace commas with dots in timecodes.
-   - Output only lines in the form [mm:ss.xx] text.
-   - Skip sequence numbers, empty lines, and arrows.
+Convert it to LRC format with dual lines (original + phonetic pronunciation).
 
-2. Immediately after, generate a second LRC block with the SAME timestamps but every lyric replaced by its sung-style phonetic pronunciation (readable, not IPA).
+Format:
+[mm:ss.xx] Original English lyrics
+[mm:ss.xx] Phonetic pronunciation (readable, not IPA)
 
-Return ONLY the two blocks, no explanations, no metadata.
+Rules:
+- Each timestamp appears TWICE: once for original, once for phonetic
+- Phonetic should be how it sounds when sung (readable English phonetics)
+- Keep exact same timestamps for both lines
+- Skip sequence numbers, empty lines, and arrows
+- Use format [mm:ss.xx] (replace commas with dots)
+- IMPORTANT: Use the EXACT same time format as the original SRT timestamps
 
-Start now:
+Example:
+[00:15.00] You can't manufacture America
+[00:15.00] Yuh cant mah-nee-foohk-tur Amur-ee-kah
+
+Return ONLY the LRC content, no explanations:
 
 ${srtContent}`;
 
@@ -72,7 +81,7 @@ Return ONLY the corrected SRT file:`;
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'llama-3.1-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1,
       max_tokens: 4000,

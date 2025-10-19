@@ -60,14 +60,93 @@ const LrcKaraoke: React.FC = () => {
     checkWhisperServerHealth().then(setWhisperServerAvailable);
   }, []);
 
+  // Persistencia de datos - cargar al montar
+  useEffect(() => {
+    const savedAudioUrl = localStorage.getItem('karaoke_audio_url');
+    const savedLyrics = localStorage.getItem('karaoke_lyrics');
+    const savedOriginalSrt = localStorage.getItem('karaoke_original_srt');
+    const savedSongMeta = localStorage.getItem('karaoke_song_meta');
+
+    if (savedAudioUrl) {
+      setAudioUrl(savedAudioUrl);
+    }
+    if (savedLyrics) {
+      try {
+        setLyrics(JSON.parse(savedLyrics));
+      } catch (e) {
+        console.error('Error cargando letras guardadas:', e);
+      }
+    }
+    if (savedOriginalSrt) {
+      setOriginalSrt(savedOriginalSrt);
+    }
+    if (savedSongMeta) {
+      try {
+        setSongMeta(JSON.parse(savedSongMeta));
+      } catch (e) {
+        console.error('Error cargando metadatos guardados:', e);
+      }
+    }
+  }, []);
+
+  // Función para limpiar datos guardados
+  const clearSavedData = () => {
+    localStorage.removeItem('karaoke_audio_url');
+    localStorage.removeItem('karaoke_lyrics');
+    localStorage.removeItem('karaoke_original_srt');
+    localStorage.removeItem('karaoke_song_meta');
+    
+    setAudioUrl(null);
+    setAudioFile(null);
+    setLyrics([]);
+    setOriginalSrt('');
+    setSongMeta({});
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
+    
+    alert('Datos limpiados. La página se recargará para aplicar los cambios.');
+    window.location.reload();
+  };
+
+  // Persistencia de datos - guardar cambios
+  useEffect(() => {
+    if (audioUrl) {
+      localStorage.setItem('karaoke_audio_url', audioUrl);
+    }
+  }, [audioUrl]);
+
+  useEffect(() => {
+    if (lyrics.length > 0) {
+      localStorage.setItem('karaoke_lyrics', JSON.stringify(lyrics));
+    }
+  }, [lyrics]);
+
+  useEffect(() => {
+    if (originalSrt) {
+      localStorage.setItem('karaoke_original_srt', originalSrt);
+    }
+  }, [originalSrt]);
+
+  useEffect(() => {
+    if (songMeta.title || songMeta.artist) {
+      localStorage.setItem('karaoke_song_meta', JSON.stringify(songMeta));
+    }
+  }, [songMeta]);
+
   // Parseo eficiente de .lrc
   function parseLRC(lrcText: string): LrcLine[] {
+    console.log('🔍 Parseando LRC:', lrcText.substring(0, 300));
+    
     const lines = lrcText.split('\n');
     const tempLines: { time: number; text: string; rawLine: string }[] = [];
 
     for (const line of lines) {
-      const timeTags = [...line.matchAll(/\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g)];
-      const text = line.replace(/\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g, '').trim();
+      // Buscar timestamps con formato más flexible (mm:ss.xx o hh:mm:ss.xxx)
+      const timeTags = [...line.matchAll(/\[(\d{1,2}):(\d{2}(?:\.\d{1,3})?)(?::(\d{2})(?:\.(\d{1,3}))?)?\]/g)];
+      const text = line.replace(/\[(\d{1,2}):(\d{2}(?:\.\d{1,3})?)(?::(\d{2})(?:\.(\d{1,3}))?)?\]/g, '').trim();
+
+      console.log('📝 Línea:', line, '| Timestamps encontrados:', timeTags.length, '| Texto:', text);
 
       if (text &&
           !text.startsWith('RCLyricsBand') &&
@@ -81,15 +160,18 @@ const LrcKaraoke: React.FC = () => {
           !text.startsWith('ve:')
       ) {
         for (const tag of timeTags) {
+          const hours = tag[3] ? parseInt(tag[3], 10) : 0; // Horas opcionales
           const min = parseInt(tag[1], 10);
           const sec = parseFloat(tag[2]);
-          const time = min * 60 + sec;
+          const milliseconds = tag[4] ? parseFloat(`0.${tag[4].padEnd(3, '0')}`) : 0; // Milisegundos opcionales
+          const time = hours * 3600 + min * 60 + sec + milliseconds;
           tempLines.push({ time, text, rawLine: line });
+          console.log('✅ Línea agregada:', { time, text });
         }
       }
     }
 
-    tempLines.sort((a, b) => a.time - b.time);
+    console.log('📊 Total líneas temporales:', tempLines.length);
 
     const result: LrcLine[] = [];
     for (let i = 0; i < tempLines.length; i++) {
@@ -103,7 +185,8 @@ const LrcKaraoke: React.FC = () => {
         result.push({ time: current.time, text: current.text });
       }
     }
-    console.log('Líneas parseadas:', result.length);
+    
+    console.log('📊 Resultado final:', result.length, 'líneas');
     return result;
   }
 
@@ -157,6 +240,34 @@ const LrcKaraoke: React.FC = () => {
     return result;
   }
 
+  // Convertir LrcLine[] a formato SRT
+  function convertLrcToSrt(lyrics: LrcLine[]): string {
+    let srtContent = '';
+    let sequenceNumber = 1;
+
+    for (const line of lyrics) {
+      const hours = Math.floor(line.time / 3600);
+      const minutes = Math.floor((line.time % 3600) / 60);
+      const seconds = Math.floor(line.time % 60);
+      const milliseconds = Math.floor((line.time % 1) * 1000);
+
+      const formatTime = (h: number, m: number, s: number, ms: number) => {
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
+      };
+
+      const startTime = formatTime(hours, minutes, seconds, milliseconds);
+      const endTime = formatTime(hours, minutes, seconds + 3, milliseconds); // 3 segundos de duración por línea
+
+      srtContent += `${sequenceNumber}\n`;
+      srtContent += `${startTime} --> ${endTime}\n`;
+      srtContent += `${line.text}\n\n`;
+      
+      sequenceNumber++;
+    }
+
+    return srtContent.trim();
+  }
+
   // Cargar archivo de audio y extraer metadatos
   const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     console.log('handleAudioUpload ejecutado');
@@ -198,54 +309,37 @@ const LrcKaraoke: React.FC = () => {
     }
   };
 
-  // Cargar archivo .lrc
-  const handleLrcUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const lrcText = event.target?.result as string;
-        const parsed = parseLRC(lrcText);
-        setLyrics(parsed);
-        setCurrentLineIndex(0);
-      };
-      reader.readAsText(file);
-    }
-  };
-
-  // Subir archivo SRT y generar fonética
+  // Cargar archivo SRT
   const handleSrtFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsGeneratingPhonetic(true);
-    setPhoneticTextResult('');
-    setLyrics([]);
-
     try {
       const srtText = await file.text();
-      const aiResponse = await generateSrtToLrcAndPhonetic(srtText);
-
-      if (!aiResponse) {
-        alert("La IA no pudo generar la fonética.");
-        setIsGeneratingPhonetic(false);
+      
+      if (!srtText || srtText.trim().length === 0) {
+        alert("El archivo SRT está vacío o no se pudo leer correctamente.");
         return;
       }
 
-      const parsedLyrics = parseLRC(aiResponse);
+      // Convertir SRT a LRC y cargar las letras
+      const lrcContent = convertSrtToLrc(srtText);
+      const parsedLyrics = parseLRC(lrcContent);
+      
       if (parsedLyrics.length === 0) {
-        alert("No se pudieron extraer letras del resultado de la IA.");
-        setIsGeneratingPhonetic(false);
+        alert("No se pudieron extraer letras del archivo SRT.");
         return;
       }
+      
       setLyrics(parsedLyrics);
-      setPhoneticTextResult(aiResponse);
+      setOriginalSrt(srtText); // Guardar SRT original
+      setCurrentLineIndex(0);
+
+      alert(`✅ Archivo SRT cargado exitosamente! Se procesaron ${parsedLyrics.length} líneas.`);
 
     } catch (error) {
-      console.error("Error processing SRT or generating phonetic lyrics:", error);
-      alert("Hubo un error al procesar el archivo SRT o generar la fonética.");
-    } finally {
-      setIsGeneratingPhonetic(false);
+      console.error("Error loading SRT file:", error);
+      alert("Hubo un error al cargar el archivo SRT.");
     }
   };
 
@@ -297,10 +391,16 @@ const LrcKaraoke: React.FC = () => {
         setIsGeneratingPhonetic(true);
         try {
           const phoneticResult = await generateSrtToLrcAndPhonetic(srtContent);
-          setPhoneticTextResult(phoneticResult);
+          if (phoneticResult && phoneticResult.trim().length > 0) {
+            setPhoneticTextResult(phoneticResult);
+          } else {
+            console.warn('Respuesta de IA vacía para fonética');
+            alert('La IA no generó contenido fonético válido. Las letras normales están listas.');
+          }
         } catch (error) {
           console.error('Error generando fonética:', error);
-          alert('No se pudo generar la versión fonética, pero las letras normales están listas.');
+          const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+          alert(`No se pudo generar la versión fonética: ${errorMessage}\n\nLas letras normales están listas y puedes usarlas.`);
         } finally {
           setIsGeneratingPhonetic(false);
         }
@@ -316,7 +416,35 @@ const LrcKaraoke: React.FC = () => {
   };
 
   const handleGeneratePhonetic = async () => {
-    srtFileInputRef.current?.click();
+    if (lyrics.length === 0) {
+      alert('No hay letras cargadas para generar fonética.');
+      return;
+    }
+
+    setIsGeneratingPhonetic(true);
+    setPhoneticTextResult('');
+
+    try {
+      // Usar las letras actuales, convertir a SRT si es necesario
+      const currentSrt = originalSrt || convertLrcToSrt(lyrics);
+      
+      const aiResponse = await generateSrtToLrcAndPhonetic(currentSrt);
+
+      if (!aiResponse || aiResponse.trim().length === 0) {
+        alert("La IA no pudo generar la fonética. Verifica tu conexión y API key.");
+        setIsGeneratingPhonetic(false);
+        return;
+      }
+
+      setPhoneticTextResult(aiResponse);
+
+    } catch (error) {
+      console.error("Error generating phonetic lyrics:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      alert(`Hubo un error al generar la fonética:\n\n${errorMessage}\n\nVerifica tu conexión a internet y la configuración de la API.`);
+    } finally {
+      setIsGeneratingPhonetic(false);
+    }
   };
 
   const handleDownloadPhonetic = () => {
@@ -342,19 +470,50 @@ const LrcKaraoke: React.FC = () => {
       return;
     }
 
-    const parsedAiResult = parseLRC(phoneticTextResult);
-    const updatedLyrics: LrcLine[] = parsedAiResult.map(line => ({
-      time: line.time,
-      text: line.pronunciation || line.text,
-      pronunciation: line.pronunciation ? line.text : undefined,
-    }));
-    setLyrics(updatedLyrics);
+    try {
+      // Pausar el audio antes de reemplazar para evitar desincronización
+      if (audioRef.current && isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
+
+      // Debugging temporal para ver qué está generando la IA
+      console.log('🔍 Texto fonético completo:', phoneticTextResult);
+      console.log('🔍 Primeras 10 líneas:', phoneticTextResult.split('\n').slice(0, 10));
+      
+      const parsedAiResult = parseLRC(phoneticTextResult);
+      
+      // Verificar que tenemos líneas válidas
+      if (parsedAiResult.length === 0) {
+        console.error('❌ No se pudieron parsear las líneas fonéticas');
+        console.error('📄 Texto que falló:', phoneticTextResult);
+        throw new Error('No se pudieron parsear las líneas fonéticas. Verifica el formato generado.');
+      }
+      
+      // El parser ya maneja el formato dual correctamente
+      setLyrics(parsedAiResult);
+      
+      // Resetear el índice de línea actual para evitar que se quede al final
+      setCurrentLineIndex(0);
+      
+      // Si hay audio cargado, resetear también el tiempo
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        setCurrentTime(0);
+      }
+      
+      alert(`✅ Letras reemplazadas exitosamente con versión fonética! Se procesaron ${parsedAiResult.length} líneas.`);
+      
+    } catch (error) {
+      console.error('Error reemplazando letras:', error);
+      alert(`Error al reemplazar las letras: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    }
   };
 
   // Corregir letras usando IA
   const handleCorrectLyrics = async () => {
-    if (!originalSrt) {
-      alert('No hay letras generadas para corregir. Primero transcribe un audio con Whisper.');
+    if (lyrics.length === 0) {
+      alert('No hay letras cargadas para corregir.');
       return;
     }
 
@@ -371,7 +530,10 @@ const LrcKaraoke: React.FC = () => {
     try {
       console.log('🔍 Corrigiendo letras con IA...');
       
-      const result = await correctLyricsWithAI(originalSrt, referenceLyrics);
+      // Si tenemos SRT original, lo usamos; si no, convertimos las letras actuales a SRT
+      const currentSrt = originalSrt || convertLrcToSrt(lyrics);
+      
+      const result = await correctLyricsWithAI(currentSrt, referenceLyrics);
       
       console.log('✅ Corrección completada');
       console.log('📝 Cambios detectados:', result.changes.length);
@@ -380,12 +542,27 @@ const LrcKaraoke: React.FC = () => {
       const summary = formatChangeSummary(result.changes);
       alert(summary);
 
+      // Pausar el audio antes de actualizar para evitar desincronización
+      if (audioRef.current && isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
+
       // Actualizar las letras con la versión corregida
       const correctedLrcContent = convertSrtToLrc(result.correctedSrt);
       const parsedCorrected = parseLRC(correctedLrcContent);
       
       setLyrics(parsedCorrected);
       setOriginalSrt(result.correctedSrt); // Actualizar el SRT original
+      
+      // Resetear el índice de línea actual
+      setCurrentLineIndex(0);
+      
+      // Si hay audio cargado, resetear también el tiempo
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        setCurrentTime(0);
+      }
 
       console.log('✅ Letras actualizadas con la versión corregida');
 
@@ -399,8 +576,8 @@ const LrcKaraoke: React.FC = () => {
 
   // Pulir letras comparando con letras originales
   const handlePolishLyrics = async () => {
-    if (!originalSrt) {
-      alert('No hay letras generadas para pulir. Primero transcribe un audio con Whisper.');
+    if (lyrics.length === 0) {
+      alert('No hay letras cargadas para pulir.');
       return;
     }
 
@@ -417,9 +594,18 @@ const LrcKaraoke: React.FC = () => {
     try {
       console.log('✨ Pulindo letras con IA...');
       
-      const polishedSrt = await polishLyricsWithOriginal(originalSrt, originalLyrics);
+      // Si tenemos SRT original, lo usamos; si no, convertimos las letras actuales a SRT
+      const currentSrt = originalSrt || convertLrcToSrt(lyrics);
+      
+      const polishedSrt = await polishLyricsWithOriginal(currentSrt, originalLyrics);
       
       console.log('✅ Pulido completado');
+
+      // Pausar el audio antes de actualizar para evitar desincronización
+      if (audioRef.current && isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
 
       // Convertir SRT pulido a LRC y actualizar
       const polishedLrcContent = convertSrtToLrc(polishedSrt);
@@ -427,6 +613,15 @@ const LrcKaraoke: React.FC = () => {
       
       setLyrics(parsedPolished);
       setOriginalSrt(polishedSrt); // Actualizar el SRT original
+      
+      // Resetear el índice de línea actual
+      setCurrentLineIndex(0);
+      
+      // Si hay audio cargado, resetear también el tiempo
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        setCurrentTime(0);
+      }
 
       alert(`✅ Letras pulidas exitosamente! Se corrigieron ${parsedPolished.length} líneas manteniendo los tiempos originales.`);
 
@@ -467,7 +662,7 @@ const LrcKaraoke: React.FC = () => {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [isPlaying, lyrics]);
+  }, [isPlaying, lyrics.length]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -523,6 +718,24 @@ const LrcKaraoke: React.FC = () => {
       {/* Song Info */}
       <SongInfo {...songMeta} />
       
+      {/* Indicador de datos guardados */}
+      {(audioUrl || lyrics.length > 0) && (
+        <div className="flex items-center justify-between p-3 bg-green-100 border-l-4 border-green-500 text-green-800 rounded-md shadow">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Datos guardados automáticamente. No perderás el progreso al recargar la página.</span>
+          </div>
+          <button
+            onClick={clearSavedData}
+            className="ml-2 px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-sm rounded transition-colors"
+          >
+            Limpiar
+          </button>
+        </div>
+      )}
+
       {/* Advertencia si no hay metadatos */}
       {(!songMeta.title && !songMeta.artist) && (
         <div className="flex items-center gap-2 p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded-md animate-pulse shadow">
@@ -663,9 +876,9 @@ const LrcKaraoke: React.FC = () => {
         <svg className="w-12 h-12 mx-auto text-blue-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
         </svg>
-        <h3 className="text-lg font-medium text-blue-700 dark:text-blue-200 mb-2">Sube tu canción y archivo .lrc</h3>
+        <h3 className="text-lg font-medium text-blue-700 dark:text-blue-200 mb-2">Sube tu canción o archivo SRT</h3>
         <p className="text-sm text-blue-500 dark:text-blue-300 mb-6">
-          Sube un archivo de audio y genera las letras automáticamente o carga un archivo .lrc
+          Sube un archivo de audio para generar letras con Whisper, o carga un archivo SRT directamente
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center flex-wrap">
@@ -684,22 +897,7 @@ const LrcKaraoke: React.FC = () => {
             Elegir archivo de audio
           </label>
 
-          {/* Subir LRC */}
-          <input
-            type="file"
-            accept=".lrc"
-            onChange={handleLrcUpload}
-            className="hidden"
-            id="lrc-upload"
-          />
-          <label htmlFor="lrc-upload" className="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in">
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Elegir archivo .lrc
-          </label>
-
-          {/* Subir SRT y Generar Fonética */}
+          {/* Cargar archivo SRT */}
           <input
             type="file"
             accept=".srt"
@@ -708,16 +906,39 @@ const LrcKaraoke: React.FC = () => {
             id="srt-upload"
             ref={srtFileInputRef}
           />
-          <button
-            onClick={handleGeneratePhonetic}
-            disabled={isGeneratingPhonetic}
-            className={`inline-flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in ${isGeneratingPhonetic ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
+          <label htmlFor="srt-upload" className="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in">
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            Generar Fonética (SRT)
-          </button>
+            Cargar archivo SRT
+          </label>
+
+
+          {/* Generar Fonética desde letras actuales */}
+          {lyrics.length > 0 && (
+            <button
+              onClick={handleGeneratePhonetic}
+              disabled={isGeneratingPhonetic}
+              className={`inline-flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in ${isGeneratingPhonetic ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {isGeneratingPhonetic ? (
+                <>
+                  <svg className="w-5 h-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Generando fonética...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  Generar Fonética
+                </>
+              )}
+            </button>
+          )}
 
           {/* Botón Whisper - Generar Letras desde MP3 */}
           {whisperServerAvailable && (
@@ -748,7 +969,7 @@ const LrcKaraoke: React.FC = () => {
           )}
 
           {/* Botón de corrección de letras */}
-          {originalSrt && (
+          {lyrics.length > 0 && (
             <button
               onClick={handleCorrectLyrics}
               disabled={isCorrectingLyrics}
@@ -776,7 +997,7 @@ const LrcKaraoke: React.FC = () => {
           )}
 
           {/* Botón de pulir letras */}
-          {originalSrt && (
+          {lyrics.length > 0 && (
             <button
               onClick={handlePolishLyrics}
               disabled={isPolishingLyrics}
