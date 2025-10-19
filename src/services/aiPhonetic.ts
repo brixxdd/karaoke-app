@@ -7,14 +7,16 @@ Task:
 Convert it to LRC format with dual lines (original + phonetic pronunciation).
 
 Format:
-[mm:ss.xx] Original English lyrics
+[mm:ss.xx] Original English lyrics (EXACTLY as they appear in the SRT)
 [mm:ss.xx] Phonetic pronunciation (readable, not IPA)
 
 Rules:
 - Each timestamp appears TWICE: once for original, once for phonetic
+- The FIRST line must be the EXACT original English text from the SRT file
+- The SECOND line is the phonetic pronunciation for Spanish speakers
 - Phonetic should be how it sounds when sung, written in a simple way that a Spanish speaker can read easily
-- DO NOT use hyphens (-) anywhere
-- Write the phonetic as continuous words or natural chunks (e.g., "yu cant manefoctur america", not "Yuh cant mah-nee-fohk-tur Amur-ee-kah")
+- DO NOT use hyphens (-) anywhere in the phonetic
+- Write the phonetic as continuous words or natural chunks
 - Use common Spanish-like spelling to mimic English sounds (e.g., "yu" for "you", "wuz" for "was", "kum" for "come")
 - Keep exact same timestamps for both lines
 - Skip sequence numbers, empty lines, and arrows
