@@ -2,7 +2,9 @@ import React, { useRef, useState, useEffect } from 'react';
 import SongInfo from './SongInfo';
 // @ts-ignore: No type definitions for 'jsmediatags'
 import jsmediatags from "jsmediatags/dist/jsmediatags.min.js";
-import { generateSrtToLrcAndPhonetic } from './services/aiPhonetic';
+import { generateSrtToLrcAndPhonetic, polishLyricsWithOriginal } from './services/aiPhonetic';
+import { transcribeAudioToSrt, convertSrtToLrc, checkWhisperServerHealth } from './services/whisperService';
+import { correctLyricsWithAI, formatChangeSummary } from './services/lyricsCorrection';
 import AiResultDisplay from './AiResultDisplay';
 
 interface LrcLine {
@@ -28,6 +30,18 @@ const LrcKaraoke: React.FC = () => {
   const [isGeneratingPhonetic, setIsGeneratingPhonetic] = useState<boolean>(false);
   const [phoneticTextResult, setPhoneticTextResult] = useState<string>('');
 
+  // Estados para Whisper
+  const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
+  const [transcriptionProgress, setTranscriptionProgress] = useState<number>(0);
+  const [whisperServerAvailable, setWhisperServerAvailable] = useState<boolean>(false);
+  
+  // Estados para corrección de letras
+  const [isCorrectingLyrics, setIsCorrectingLyrics] = useState<boolean>(false);
+  const [originalSrt, setOriginalSrt] = useState<string>(''); // Guardar SRT original
+  
+  // Estados para pulido de letras
+  const [isPolishingLyrics, setIsPolishingLyrics] = useState<boolean>(false);
+
   // Metadatos de la canción
   const [songMeta, setSongMeta] = useState<{
     title?: string;
@@ -39,16 +53,20 @@ const LrcKaraoke: React.FC = () => {
   }>({});
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const srtFileInputRef = useRef<HTMLInputElement>(null); // Ref for hidden SRT file input
-  const rafId = useRef<number | null>(null);
+  const srtFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Verificar disponibilidad del servidor Whisper al montar
+  useEffect(() => {
+    checkWhisperServerHealth().then(setWhisperServerAvailable);
+  }, []);
 
   // Parseo eficiente de .lrc
-  function parseLRC(lrcText: string): LrcLine[] { // ✅ Corregido: retorna LrcLine[]
+  function parseLRC(lrcText: string): LrcLine[] {
     const lines = lrcText.split('\n');
     const tempLines: { time: number; text: string; rawLine: string }[] = [];
 
     for (const line of lines) {
-      const timeTags = [...line.matchAll(/\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g)]; // Allow up to 3 decimal places for milliseconds
+      const timeTags = [...line.matchAll(/\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g)];
       const text = line.replace(/\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g, '').trim();
 
       if (text &&
@@ -71,7 +89,6 @@ const LrcKaraoke: React.FC = () => {
       }
     }
 
-    // Sort by time to ensure correct pairing
     tempLines.sort((a, b) => a.time - b.time);
 
     const result: LrcLine[] = [];
@@ -80,11 +97,9 @@ const LrcKaraoke: React.FC = () => {
       const next = tempLines[i + 1];
 
       if (next && current.time === next.time) {
-        // Assume current is the main lyric and next is the pronunciation
         result.push({ time: current.time, text: current.text, pronunciation: next.text });
-        i++; // Skip the next line as it's already processed
+        i++;
       } else {
-        // Single lyric line or the last line
         result.push({ time: current.time, text: current.text });
       }
     }
@@ -102,7 +117,7 @@ const LrcKaraoke: React.FC = () => {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
 
-      if (!line) { // Empty line, usually separates blocks
+      if (!line) {
         if (currentTextLines.length > 0 && currentTimestamp > 0) {
           result.push({ time: currentTimestamp, text: currentTextLines.join(' ') });
         }
@@ -111,9 +126,7 @@ const LrcKaraoke: React.FC = () => {
         continue;
       }
 
-      // Check if it's a sequence number
       if (/^\d+$/.test(line)) {
-        // If we have collected text and a timestamp, push it before starting a new block
         if (currentTextLines.length > 0 && currentTimestamp > 0) {
           result.push({ time: currentTimestamp, text: currentTextLines.join(' ') });
         }
@@ -122,7 +135,6 @@ const LrcKaraoke: React.FC = () => {
         continue;
       }
 
-      // Check for timestamp line (e.g., 00:00:01,000 --> 00:00:04,000)
       const timeMatch = line.match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
       if (timeMatch) {
         if (currentTextLines.length > 0 && currentTimestamp > 0) {
@@ -132,14 +144,12 @@ const LrcKaraoke: React.FC = () => {
         const startSec = parseInt(timeMatch[3], 10);
         const startMs = parseInt(timeMatch[4], 10);
         currentTimestamp = startMin * 60 + startSec + startMs / 1000;
-        currentTextLines = []; // Reset text lines for the new timestamp
+        currentTextLines = [];
       } else {
-        // It's a text line
         currentTextLines.push(line);
       }
     }
 
-    // Push any remaining collected text after the loop finishes
     if (currentTextLines.length > 0 && currentTimestamp > 0) {
       result.push({ time: currentTimestamp, text: currentTextLines.join(' ') });
     }
@@ -158,14 +168,13 @@ const LrcKaraoke: React.FC = () => {
       setIsLoading(true);
       setIsPlaying(false);
       setCurrentTime(0);
-      // Extraer metadatos
+      
       jsmediatags.read(file, {
         onSuccess: (tag: any) => {
           console.log(tag);
           let coverUrl;
           if (tag.tags.picture) {
             const { data, format } = tag.tags.picture;
-            // Convierte el array de bytes a Uint8Array
             const byteArray = new Uint8Array(data);
             const blob = new Blob([byteArray], { type: format });
             coverUrl = URL.createObjectURL(blob);
@@ -204,13 +213,14 @@ const LrcKaraoke: React.FC = () => {
     }
   };
 
+  // Subir archivo SRT y generar fonética
   const handleSrtFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsGeneratingPhonetic(true);
     setPhoneticTextResult('');
-    setLyrics([]); // Clear existing lyrics
+    setLyrics([]);
 
     try {
       const srtText = await file.text();
@@ -229,7 +239,7 @@ const LrcKaraoke: React.FC = () => {
         return;
       }
       setLyrics(parsedLyrics);
-      setPhoneticTextResult(aiResponse); // Store the raw AI response for download if needed
+      setPhoneticTextResult(aiResponse);
 
     } catch (error) {
       console.error("Error processing SRT or generating phonetic lyrics:", error);
@@ -239,8 +249,74 @@ const LrcKaraoke: React.FC = () => {
     }
   };
 
+  // Generar SRT desde MP3 usando Whisper
+  const handleGenerateSrtFromAudio = async () => {
+    if (!audioFile) {
+      alert('Primero debes cargar un archivo de audio');
+      return;
+    }
+
+    setIsTranscribing(true);
+    setTranscriptionProgress(0);
+
+    try {
+      console.log('Iniciando transcripción con Whisper...');
+      
+      // Pasar metadatos de la canción al servicio
+      const metadata = {
+        title: songMeta.title || audioFile.name.replace(/\.[^/.]+$/, ''),
+        artist: songMeta.artist
+      };
+
+      const srtContent = await transcribeAudioToSrt(
+        audioFile,
+        metadata,
+        (progress) => setTranscriptionProgress(progress)
+      );
+
+      console.log('Transcripción completada:', srtContent.substring(0, 200));
+
+      const lrcContent = convertSrtToLrc(srtContent);
+      const parsedLyrics = parseLRC(lrcContent);
+
+      if (parsedLyrics.length === 0) {
+        alert('No se pudieron extraer letras del audio. Intenta con otro archivo.');
+        return;
+      }
+
+      setLyrics(parsedLyrics);
+      setOriginalSrt(srtContent); // Guardar SRT original para corrección
+      
+      alert(`¡Transcripción completada! Se generaron ${parsedLyrics.length} líneas de letra.\n\nArchivo guardado como: ${metadata.artist || 'Artista_Desconocido'}-${metadata.title}.srt`);
+
+      const shouldGeneratePhonetic = window.confirm(
+        '¿Deseas generar también la versión fonética de las letras?'
+      );
+
+      if (shouldGeneratePhonetic) {
+        setIsGeneratingPhonetic(true);
+        try {
+          const phoneticResult = await generateSrtToLrcAndPhonetic(srtContent);
+          setPhoneticTextResult(phoneticResult);
+        } catch (error) {
+          console.error('Error generando fonética:', error);
+          alert('No se pudo generar la versión fonética, pero las letras normales están listas.');
+        } finally {
+          setIsGeneratingPhonetic(false);
+        }
+      }
+
+    } catch (error) {
+      console.error('Error en transcripción:', error);
+      alert(`Error al transcribir el audio: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setIsTranscribing(false);
+      setTranscriptionProgress(0);
+    }
+  };
+
   const handleGeneratePhonetic = async () => {
-    srtFileInputRef.current?.click(); // Trigger file input click
+    srtFileInputRef.current?.click();
   };
 
   const handleDownloadPhonetic = () => {
@@ -269,23 +345,102 @@ const LrcKaraoke: React.FC = () => {
     const parsedAiResult = parseLRC(phoneticTextResult);
     const updatedLyrics: LrcLine[] = parsedAiResult.map(line => ({
       time: line.time,
-      text: line.pronunciation || line.text, // Phonetic becomes primary
-      pronunciation: line.pronunciation ? line.text : undefined, // Original becomes secondary
+      text: line.pronunciation || line.text,
+      pronunciation: line.pronunciation ? line.text : undefined,
     }));
     setLyrics(updatedLyrics);
   };
 
-  // Sincronización de la letra
-
-  // Sincronización de la letra
-  const animate = () => {
-    if (audioRef.current) {
-      const time = audioRef.current.currentTime;
-      setCurrentTime(time);
-      updateCurrentLine(time);
+  // Corregir letras usando IA
+  const handleCorrectLyrics = async () => {
+    if (!originalSrt) {
+      alert('No hay letras generadas para corregir. Primero transcribe un audio con Whisper.');
+      return;
     }
-    rafId.current = requestAnimationFrame(animate);
+
+    const referenceLyrics = prompt(
+      'Pega aquí las letras correctas de la canción (puedes copiarlas de Genius, AZLyrics, etc.):'
+    );
+
+    if (!referenceLyrics || referenceLyrics.trim().length === 0) {
+      return;
+    }
+
+    setIsCorrectingLyrics(true);
+
+    try {
+      console.log('🔍 Corrigiendo letras con IA...');
+      
+      const result = await correctLyricsWithAI(originalSrt, referenceLyrics);
+      
+      console.log('✅ Corrección completada');
+      console.log('📝 Cambios detectados:', result.changes.length);
+
+      // Mostrar resumen de cambios
+      const summary = formatChangeSummary(result.changes);
+      alert(summary);
+
+      // Actualizar las letras con la versión corregida
+      const correctedLrcContent = convertSrtToLrc(result.correctedSrt);
+      const parsedCorrected = parseLRC(correctedLrcContent);
+      
+      setLyrics(parsedCorrected);
+      setOriginalSrt(result.correctedSrt); // Actualizar el SRT original
+
+      console.log('✅ Letras actualizadas con la versión corregida');
+
+    } catch (error) {
+      console.error('Error corrigiendo letras:', error);
+      alert(`Error al corregir las letras: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setIsCorrectingLyrics(false);
+    }
   };
+
+  // Pulir letras comparando con letras originales
+  const handlePolishLyrics = async () => {
+    if (!originalSrt) {
+      alert('No hay letras generadas para pulir. Primero transcribe un audio con Whisper.');
+      return;
+    }
+
+    const originalLyrics = prompt(
+      'Pega aquí las letras originales del cantante (desde Genius, AZLyrics, etc.):'
+    );
+
+    if (!originalLyrics || originalLyrics.trim().length === 0) {
+      return;
+    }
+
+    setIsPolishingLyrics(true);
+
+    try {
+      console.log('✨ Pulindo letras con IA...');
+      
+      const polishedSrt = await polishLyricsWithOriginal(originalSrt, originalLyrics);
+      
+      console.log('✅ Pulido completado');
+
+      // Convertir SRT pulido a LRC y actualizar
+      const polishedLrcContent = convertSrtToLrc(polishedSrt);
+      const parsedPolished = parseLRC(polishedLrcContent);
+      
+      setLyrics(parsedPolished);
+      setOriginalSrt(polishedSrt); // Actualizar el SRT original
+
+      alert(`✅ Letras pulidas exitosamente! Se corrigieron ${parsedPolished.length} líneas manteniendo los tiempos originales.`);
+
+      console.log('✅ Letras actualizadas con la versión pulida');
+
+    } catch (error) {
+      console.error('Error puliendo letras:', error);
+      alert(`Error al pulir las letras: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setIsPolishingLyrics(false);
+    }
+  };
+
+  
 
   const updateCurrentLine = (time: number) => {
     let index = 0;
@@ -296,15 +451,23 @@ const LrcKaraoke: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isPlaying) {
-      rafId.current = requestAnimationFrame(animate);
-    } else if (rafId.current) {
-      cancelAnimationFrame(rafId.current);
+    let intervalId: number | null = null;
+    
+    if (isPlaying && audioRef.current) {
+      // Actualizar cada 100ms en lugar de cada frame
+      intervalId = setInterval(() => {
+        if (audioRef.current) {
+          const time = audioRef.current.currentTime;
+          setCurrentTime(time);
+          updateCurrentLine(time);
+        }
+      }, 100);
     }
+    
     return () => {
-      if (rafId.current) cancelAnimationFrame(rafId.current);
+      if (intervalId) clearInterval(intervalId);
     };
-  }, [isPlaying]);
+  }, [isPlaying, lyrics]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -359,6 +522,7 @@ const LrcKaraoke: React.FC = () => {
     <div className="space-y-6">
       {/* Song Info */}
       <SongInfo {...songMeta} />
+      
       {/* Advertencia si no hay metadatos */}
       {(!songMeta.title && !songMeta.artist) && (
         <div className="flex items-center gap-2 p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded-md animate-pulse shadow">
@@ -368,6 +532,7 @@ const LrcKaraoke: React.FC = () => {
           <span>No se encontraron metadatos en el archivo de audio. Se mostrará información genérica.</span>
         </div>
       )}
+
       <div className="flex flex-col gap-6">
         <div className="w-full flex flex-col justify-between animate-fade-in-up">
           <div className="mb-6 space-y-2">
@@ -390,6 +555,7 @@ const LrcKaraoke: React.FC = () => {
               </div>
             </div>
           </div>
+
           <div className="mb-6">
             <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
               <div className="flex justify-between text-sm mb-3 font-mono text-blue-700 dark:text-blue-300">
@@ -411,6 +577,7 @@ const LrcKaraoke: React.FC = () => {
               </div>
             </div>
           </div>
+
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-center space-x-8">
               <button
@@ -451,6 +618,7 @@ const LrcKaraoke: React.FC = () => {
           </div>
         </div>
       </div>
+
       {/* Lyrics Display */}
       <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-800 dark:to-gray-900 rounded-xl p-4 sm:p-6 shadow-inner min-h-[220px] sm:min-h-[300px] animate-fade-in-up border border-blue-200 dark:border-gray-700">
         <div className="flex flex-col items-center space-y-3">
@@ -460,7 +628,7 @@ const LrcKaraoke: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <p>No hay letras cargadas</p>
-              <p className="text-sm mt-1">Sube un archivo .lrc para ver las letras sincronizadas</p>
+              <p className="text-sm mt-1">Sube un archivo .lrc o genera letras automáticamente con Whisper</p>
             </div>
           ) : (
             lyrics
@@ -489,6 +657,7 @@ const LrcKaraoke: React.FC = () => {
           )}
         </div>
       </div>
+
       {/* Upload Section */}
       <div className="mt-10 p-6 border-2 border-dashed border-blue-300 dark:border-blue-700 rounded-xl text-center bg-white/70 dark:bg-blue-900/40 animate-fade-in-up hover:border-blue-400 dark:hover:border-blue-600 transition-colors">
         <svg className="w-12 h-12 mx-auto text-blue-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -496,9 +665,11 @@ const LrcKaraoke: React.FC = () => {
         </svg>
         <h3 className="text-lg font-medium text-blue-700 dark:text-blue-200 mb-2">Sube tu canción y archivo .lrc</h3>
         <p className="text-sm text-blue-500 dark:text-blue-300 mb-6">
-          Sube un archivo de audio y un archivo .lrc para ver la letra sincronizada
+          Sube un archivo de audio y genera las letras automáticamente o carga un archivo .lrc
         </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+
+        <div className="flex flex-col sm:flex-row gap-4 justify-center flex-wrap">
+          {/* Subir Audio */}
           <input
             type="file"
             accept="audio/*"
@@ -512,6 +683,8 @@ const LrcKaraoke: React.FC = () => {
             </svg>
             Elegir archivo de audio
           </label>
+
+          {/* Subir LRC */}
           <input
             type="file"
             accept=".lrc"
@@ -525,6 +698,8 @@ const LrcKaraoke: React.FC = () => {
             </svg>
             Elegir archivo .lrc
           </label>
+
+          {/* Subir SRT y Generar Fonética */}
           <input
             type="file"
             accept=".srt"
@@ -543,7 +718,127 @@ const LrcKaraoke: React.FC = () => {
             </svg>
             Generar Fonética (SRT)
           </button>
+
+          {/* Botón Whisper - Generar Letras desde MP3 */}
+          {whisperServerAvailable && (
+            <button
+              onClick={handleGenerateSrtFromAudio}
+              disabled={isTranscribing || !audioFile}
+              className={`inline-flex items-center px-6 py-3 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in ${
+                isTranscribing || !audioFile ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {isTranscribing ? (
+                <>
+                  <svg className="w-5 h-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Transcribiendo... {transcriptionProgress}%
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                  Generar Letras (Whisper)
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Botón de corrección de letras */}
+          {originalSrt && (
+            <button
+              onClick={handleCorrectLyrics}
+              disabled={isCorrectingLyrics}
+              className={`inline-flex items-center px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in ${
+                isCorrectingLyrics ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {isCorrectingLyrics ? (
+                <>
+                  <svg className="w-5 h-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Corrigiendo...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Corregir Letras con IA
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Botón de pulir letras */}
+          {originalSrt && (
+            <button
+              onClick={handlePolishLyrics}
+              disabled={isPolishingLyrics}
+              className={`inline-flex items-center px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in ${
+                isPolishingLyrics ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {isPolishingLyrics ? (
+                <>
+                  <svg className="w-5 h-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Pulindo...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
+                  </svg>
+                  Pulir Letras con IA
+                </>
+              )}
+            </button>
+          )}
         </div>
+
+        {/* Mensaje si el servidor Whisper no está disponible */}
+        {!whisperServerAvailable && (
+          <div className="mt-4 flex items-center gap-2 p-3 bg-orange-100 border-l-4 border-orange-500 text-orange-800 rounded-md">
+            <svg className="w-5 h-5 text-orange-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="text-sm">
+              Servidor Whisper no disponible. Inicia el servidor para usar transcripción automática.
+              <a href="#" className="ml-1 underline font-medium" onClick={(e) => {
+                e.preventDefault();
+                checkWhisperServerHealth().then(setWhisperServerAvailable);
+              }}>
+                Reintentar
+              </a>
+            </span>
+          </div>
+        )}
+
+        {/* Barra de progreso durante transcripción */}
+        {isTranscribing && (
+          <div className="mt-4">
+            <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+              <span>Transcribiendo audio con Whisper...</span>
+              <span>{transcriptionProgress}%</span>
+            </div>
+            <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-300"
+                style={{ width: `${transcriptionProgress}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
+
+        {/* Componente de resultados fonéticos */}
         <AiResultDisplay
           isLoading={isGeneratingPhonetic}
           phoneticText={phoneticTextResult}
@@ -551,6 +846,7 @@ const LrcKaraoke: React.FC = () => {
           onReplace={handleReplaceWithPhonetic}
         />
       </div>
+
       {/* Hidden Audio Element */}
       <audio ref={audioRef} src={audioUrl ?? undefined} onEnded={() => setIsPlaying(false)} />
     </div>
