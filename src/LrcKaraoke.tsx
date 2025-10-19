@@ -6,6 +6,7 @@ import { generateSrtToLrcAndPhonetic, polishLyricsWithOriginal } from './service
 import { transcribeAudioToSrt, convertSrtToLrc, checkWhisperServerHealth } from './services/whisperService';
 import { correctLyricsWithAI, formatChangeSummary } from './services/lyricsCorrection';
 import AiResultDisplay from './AiResultDisplay';
+import FullscreenKaraoke from './FullscreenKaraoke';
 
 interface LrcLine {
   time: number;
@@ -41,6 +42,9 @@ const LrcKaraoke: React.FC = () => {
   
   // Estados para pulido de letras
   const [isPolishingLyrics, setIsPolishingLyrics] = useState<boolean>(false);
+
+  // Estado para pantalla completa
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
   // Metadatos de la canción
   const [songMeta, setSongMeta] = useState<{
@@ -142,9 +146,9 @@ const LrcKaraoke: React.FC = () => {
     const tempLines: { time: number; text: string; rawLine: string }[] = [];
 
     for (const line of lines) {
-      // Buscar timestamps con formato más flexible (mm:ss.xx o hh:mm:ss.xxx)
-      const timeTags = [...line.matchAll(/\[(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?\]/g)];
-      const text = line.replace(/\[(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?\]/g, '').trim();
+      // Buscar timestamps con formato más flexible (mm:ss.xx o hh:mm:ss.xxx o hh:mm:ss,xxx)
+      const timeTags = [...line.matchAll(/\[(\d{1,2}):(\d{2})(?::(\d{2}))?(?:[.,](\d{1,3}))?\]/g)];
+      const text = line.replace(/\[(\d{1,2}):(\d{2})(?::(\d{2}))?(?:[.,](\d{1,3}))?\]/g, '').trim();
 
       console.log('📝 Línea:', line, '| Timestamps encontrados:', timeTags.length, '| Texto:', text);
 
@@ -725,6 +729,32 @@ const LrcKaraoke: React.FC = () => {
     }
   };
 
+  // Funciones para pantalla completa
+  const handleEnterFullscreen = () => {
+    setIsFullscreen(true);
+  };
+
+  const handleExitFullscreen = () => {
+    setIsFullscreen(false);
+  };
+
+  // Manejar tecla ESC para salir de pantalla completa
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        handleExitFullscreen();
+      }
+    };
+
+    if (isFullscreen) {
+      document.addEventListener('keydown', handleKeyPress);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [isFullscreen]);
+
   return (
     <div className="space-y-6">
       {/* Song Info */}
@@ -825,20 +855,33 @@ const LrcKaraoke: React.FC = () => {
                   </svg>
                 )}
               </button>
-              <div className="flex flex-col items-center space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Velocidad</label>
-                <select
-                  onChange={e => changePlaybackRate(parseFloat(e.target.value))}
-                  defaultValue="1.0"
-                  className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-sm font-medium shadow focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[100px]"
-                >
-                  <option value="0.5">0.5x</option>
-                  <option value="0.75">0.75x</option>
-                  <option value="1.0">Normal</option>
-                  <option value="1.25">1.25x</option>
-                  <option value="1.5">1.5x</option>
-                </select>
-              </div>
+          <div className="flex flex-col items-center space-y-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Velocidad</label>
+            <select
+              onChange={e => changePlaybackRate(parseFloat(e.target.value))}
+              defaultValue="1.0"
+              className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-sm font-medium shadow focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[100px]"
+            >
+              <option value="0.5">0.5x</option>
+              <option value="0.75">0.75x</option>
+              <option value="1.0">Normal</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+            </select>
+          </div>
+
+          {/* Botón Pantalla Completa */}
+          {lyrics.length > 0 && (
+            <button
+              onClick={handleEnterFullscreen}
+              className="flex flex-col items-center space-y-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all duration-200 shadow-lg transform hover:scale-105"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+              </svg>
+              <span className="text-xs font-medium">Pantalla Completa</span>
+            </button>
+          )}
             </div>
           </div>
         </div>
@@ -1082,6 +1125,21 @@ const LrcKaraoke: React.FC = () => {
 
       {/* Hidden Audio Element */}
       <audio ref={audioRef} src={audioUrl ?? undefined} onEnded={() => setIsPlaying(false)} />
+
+      {/* Fullscreen Karaoke */}
+      <FullscreenKaraoke
+        isFullscreen={isFullscreen}
+        onExitFullscreen={handleExitFullscreen}
+        songMeta={songMeta}
+        lyrics={lyrics}
+        currentLineIndex={currentLineIndex}
+        currentTime={currentTime}
+        duration={duration}
+        isPlaying={isPlaying}
+        onTogglePlayPause={togglePlayPause}
+        onSeekTo={seekTo}
+        onPlaybackRateChange={changePlaybackRate}
+      />
     </div>
   );
 };
