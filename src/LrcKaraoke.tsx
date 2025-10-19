@@ -143,8 +143,8 @@ const LrcKaraoke: React.FC = () => {
 
     for (const line of lines) {
       // Buscar timestamps con formato más flexible (mm:ss.xx o hh:mm:ss.xxx)
-      const timeTags = [...line.matchAll(/\[(\d{1,2}):(\d{2}(?:\.\d{1,3})?)(?::(\d{2})(?:\.(\d{1,3}))?)?\]/g)];
-      const text = line.replace(/\[(\d{1,2}):(\d{2}(?:\.\d{1,3})?)(?::(\d{2})(?:\.(\d{1,3}))?)?\]/g, '').trim();
+      const timeTags = [...line.matchAll(/\[(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?\]/g)];
+      const text = line.replace(/\[(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?\]/g, '').trim();
 
       console.log('📝 Línea:', line, '| Timestamps encontrados:', timeTags.length, '| Texto:', text);
 
@@ -160,13 +160,25 @@ const LrcKaraoke: React.FC = () => {
           !text.startsWith('ve:')
       ) {
         for (const tag of timeTags) {
-          const hours = tag[3] ? parseInt(tag[3], 10) : 0; // Horas opcionales
-          const min = parseInt(tag[1], 10);
-          const sec = parseFloat(tag[2]);
-          const milliseconds = tag[4] ? parseFloat(`0.${tag[4].padEnd(3, '0')}`) : 0; // Milisegundos opcionales
-          const time = hours * 3600 + min * 60 + sec + milliseconds;
+          // Formato [mm:ss.xx] o [hh:mm:ss.xxx]
+          let time: number;
+          
+          if (tag[3]) {
+            // Formato [hh:mm:ss.xxx] - tiene horas
+            const hours = parseInt(tag[1], 10);
+            const min = parseInt(tag[2], 10);
+            const sec = parseInt(tag[3], 10);
+            const milliseconds = tag[4] ? parseInt(tag[4], 10) / 1000 : 0;
+            time = hours * 3600 + min * 60 + sec + milliseconds;
+          } else {
+            // Formato [mm:ss.xx] - solo minutos y segundos
+            const min = parseInt(tag[1], 10);
+            const sec = parseFloat(tag[2]);
+            time = min * 60 + sec;
+          }
+          
           tempLines.push({ time, text, rawLine: line });
-          console.log('✅ Línea agregada:', { time, text });
+          console.log('✅ Línea agregada:', { time, text, tag: tag[0] });
         }
       }
     }
