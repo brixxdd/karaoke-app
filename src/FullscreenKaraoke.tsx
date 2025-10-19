@@ -41,13 +41,27 @@ const FullscreenKaraoke: React.FC<FullscreenKaraokeProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [controlsTimeout, setControlsTimeout] = useState<number | null>(null);
 
-  // Auto-hide controls after 3 seconds
+  // Auto-hide controls after 3 seconds and handle fullscreen
   useEffect(() => {
     if (isFullscreen) {
+      // Solicitar pantalla completa real
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(e => {
+          console.error("Error entering fullscreen:", e);
+        });
+      }
+      
       const timeout = setTimeout(() => {
         setShowControls(false);
       }, 3000);
       setControlsTimeout(timeout);
+    } else {
+      // Salir de pantalla completa
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(e => {
+          console.error("Error exiting fullscreen:", e);
+        });
+      }
     }
 
     return () => {
@@ -56,6 +70,20 @@ const FullscreenKaraoke: React.FC<FullscreenKaraokeProps> = ({
       }
     };
   }, [isFullscreen, isPlaying]);
+
+  // Detectar cuando se sale de pantalla completa
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && isFullscreen) {
+        onExitFullscreen();
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, [isFullscreen, onExitFullscreen]);
 
   // Show controls on mouse move
   const handleMouseMove = () => {
