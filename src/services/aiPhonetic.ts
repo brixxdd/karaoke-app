@@ -12,7 +12,10 @@ Format:
 
 Rules:
 - Each timestamp appears TWICE: once for original, once for phonetic
-- Phonetic should be how it sounds when sung (readable English phonetics)
+- Phonetic should be how it sounds when sung, written in a simple way that a Spanish speaker can read easily
+- DO NOT use hyphens (-) anywhere
+- Write the phonetic as continuous words or natural chunks (e.g., "yu cant manefoctur america", not "Yuh cant mah-nee-fohk-tur Amur-ee-kah")
+- Use common Spanish-like spelling to mimic English sounds (e.g., "yu" for "you", "wuz" for "was", "kum" for "come")
 - Keep exact same timestamps for both lines
 - Skip sequence numbers, empty lines, and arrows
 - Use format [mm:ss.xx] (replace commas with dots)
@@ -20,7 +23,7 @@ Rules:
 
 Example:
 [00:15.00] You can't manufacture America
-[00:15.00] Yuh cant mah-nee-foohk-tur Amur-ee-kah
+[00:15.00] yu cant manefoctur america
 
 Return ONLY the LRC content, no explanations:
 
