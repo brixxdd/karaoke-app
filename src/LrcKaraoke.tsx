@@ -756,244 +756,318 @@ const LrcKaraoke: React.FC = () => {
   }, [isFullscreen]);
 
   return (
-    <div className="space-y-6">
-      {/* Song Info */}
-      <SongInfo {...songMeta} />
-      
-      {/* Indicador de datos guardados */}
-      {(audioUrl || lyrics.length > 0) && (
-        <div className="flex items-center justify-between p-3 bg-green-100 border-l-4 border-green-500 text-green-800 rounded-md shadow">
-          <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Datos guardados automáticamente. No perderás el progreso al recargar la página.</span>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
+      {/* Hero Section */}
+      <div className="relative overflow-hidden">
+        {/* Background Effects */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,rgba(120,119,198,0.3),transparent_50%)]"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,119,198,0.3),transparent_50%)]"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_40%_80%,rgba(120,219,255,0.2),transparent_50%)]"></div>
+        
+        <div className="relative z-10 container mx-auto px-6 py-12">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <h1 className="text-5xl md:text-7xl font-black bg-gradient-to-r from-white via-blue-200 to-purple-200 bg-clip-text text-transparent mb-4">
+              Karaoke Studio
+            </h1>
+            <p className="text-xl text-blue-200 max-w-2xl mx-auto">
+              Canta con confianza usando pronunciación fonética inteligente
+            </p>
           </div>
-          <button
-            onClick={clearSavedData}
-            className="ml-2 px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-sm rounded transition-colors"
-          >
-            Limpiar
-          </button>
-        </div>
-      )}
 
-      {/* Advertencia si no hay metadatos */}
-      {(!songMeta.title && !songMeta.artist) && (
-        <div className="flex items-center gap-2 p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded-md animate-pulse shadow">
-          <svg className="w-5 h-5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z" />
-          </svg>
-          <span>No se encontraron metadatos en el archivo de audio. Se mostrará información genérica.</span>
-        </div>
-      )}
+          {/* Song Info Card */}
+          <div className="max-w-4xl mx-auto mb-12">
+            <SongInfo {...songMeta} />
+          </div>
 
-      <div className="flex flex-col gap-6">
-        <div className="w-full flex flex-col justify-between animate-fade-in-up">
-          <div className="mb-6 space-y-2">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg sm:text-xl font-bold text-blue-800 dark:text-blue-200 break-all leading-tight">
-                {audioFile ? audioFile.name : 'Sin audio'}
-              </h3>
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-gray-500 dark:text-gray-400 text-sm">
-                  Archivo .lrc: {lyrics.length > 0 ? 'Cargado' : 'No cargado'}
-                </p>
-                {lyrics.length > 0 && (
-                  <div className="flex items-center text-green-600 dark:text-green-400 text-sm">
-                    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          {/* Status Indicators */}
+          <div className="max-w-4xl mx-auto mb-8 space-y-4">
+            {/* Data Saved Indicator */}
+            {(audioUrl || lyrics.length > 0) && (
+              <div className="flex items-center justify-between p-4 bg-emerald-500/20 backdrop-blur-sm border border-emerald-500/30 rounded-2xl shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Listo
                   </div>
-                )}
+                  <div>
+                    <p className="font-semibold text-emerald-200">Datos Guardados</p>
+                    <p className="text-sm text-emerald-300">Tu progreso se mantiene automáticamente</p>
+                  </div>
+                </div>
+                <button
+                  onClick={clearSavedData}
+                  className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 hover:text-red-100 rounded-xl transition-all duration-200 border border-red-500/30"
+                >
+                  Limpiar
+                </button>
               </div>
-            </div>
+            )}
+
+            {/* Metadata Warning */}
+            {(!songMeta.title && !songMeta.artist) && (
+              <div className="flex items-center gap-3 p-4 bg-amber-500/20 backdrop-blur-sm border border-amber-500/30 rounded-2xl shadow-lg">
+                <div className="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-semibold text-amber-200">Metadatos no encontrados</p>
+                  <p className="text-sm text-amber-300">Se mostrará información genérica del archivo</p>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="mb-6">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-              <div className="flex justify-between text-sm mb-3 font-mono text-blue-700 dark:text-blue-300">
-                <span className="font-semibold">{Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')}</span>
-                <span className="font-semibold">{Math.floor(duration / 60)}:{Math.floor(duration % 60).toString().padStart(2, '0')}</span>
+          {/* Main Player Section */}
+          <div className="max-w-6xl mx-auto">
+            <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-2xl">
+              {/* File Info */}
+              <div className="text-center mb-8">
+                <div className="inline-flex items-center gap-3 px-6 py-3 bg-white/10 rounded-2xl border border-white/20">
+                  <svg className="w-6 h-6 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                  </svg>
+                  <span className="text-lg font-semibold text-white">
+                    {audioFile ? audioFile.name : 'Sin archivo de audio'}
+                  </span>
+                  {lyrics.length > 0 && (
+                    <div className="flex items-center gap-2 text-emerald-300">
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-sm font-medium">Letras cargadas</span>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div
-                className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden cursor-pointer shadow-inner hover:h-4 transition-all duration-200 progress-bar"
-                onClick={e => {
-                  const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-                  const percent = (e.clientX - rect.left) / rect.width;
-                  seekTo(percent);
-                }}
-              >
+
+              {/* Progress Bar */}
+              <div className="mb-8">
+                <div className="flex justify-between text-sm mb-3 font-mono text-blue-200">
+                  <span className="font-semibold">{Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')}</span>
+                  <span className="font-semibold">{Math.floor(duration / 60)}:{Math.floor(duration % 60).toString().padStart(2, '0')}</span>
+                </div>
                 <div
-                  className="h-full bg-gradient-to-r from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 transition-all duration-200 ease-linear shadow-sm"
-                  style={{ width: `${(currentTime / duration) * 100 || 0}%` }}
-                ></div>
+                  className="w-full h-3 bg-white/20 rounded-full overflow-hidden cursor-pointer shadow-inner hover:h-4 transition-all duration-200"
+                  onClick={e => {
+                    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                    const percent = (e.clientX - rect.left) / rect.width;
+                    seekTo(percent);
+                  }}
+                >
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 transition-all duration-200 ease-linear shadow-sm"
+                    style={{ width: `${(currentTime / duration) * 100 || 0}%` }}
+                  ></div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-center space-x-8">
-              <button
-                onClick={togglePlayPause}
-                disabled={isLoading || !audioFile}
-                className={`w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-400 hover:from-blue-700 hover:to-blue-500 text-white transition-all duration-200 shadow-lg transform hover:scale-105 active:scale-95 ${isLoading || !audioFile ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {isLoading ? (
-                  <svg className="w-6 h-6 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : isPlaying ? (
-                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
-                  </svg>
-                ) : (
-                  <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  </svg>
+              {/* Controls */}
+              <div className="flex items-center justify-center space-x-8 mb-8">
+                <button
+                  onClick={togglePlayPause}
+                  disabled={isLoading || !audioFile}
+                  className={`w-20 h-20 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-400 hover:to-purple-500 text-white transition-all duration-200 shadow-2xl transform hover:scale-110 active:scale-95 ${isLoading || !audioFile ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {isLoading ? (
+                    <svg className="w-8 h-8 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : isPlaying ? (
+                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
+                    </svg>
+                  ) : (
+                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    </svg>
+                  )}
+                </button>
+
+                <div className="flex flex-col items-center space-y-3">
+                  <label className="text-sm font-medium text-blue-200">Velocidad</label>
+                  <select
+                    onChange={e => changePlaybackRate(parseFloat(e.target.value))}
+                    defaultValue="1.0"
+                    className="bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl px-4 py-2 text-white text-sm font-medium shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[120px]"
+                  >
+                    <option value="0.5">0.5x</option>
+                    <option value="0.75">0.75x</option>
+                    <option value="1.0">Normal</option>
+                    <option value="1.25">1.25x</option>
+                    <option value="1.5">1.5x</option>
+                  </select>
+                </div>
+
+                {/* Fullscreen Button */}
+                {lyrics.length > 0 && (
+                  <button
+                    onClick={handleEnterFullscreen}
+                    className="flex flex-col items-center space-y-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white rounded-xl transition-all duration-200 shadow-lg transform hover:scale-105"
+                  >
+                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                    <span className="text-sm font-medium">Pantalla Completa</span>
+                  </button>
                 )}
-              </button>
-          <div className="flex flex-col items-center space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Velocidad</label>
-            <select
-              onChange={e => changePlaybackRate(parseFloat(e.target.value))}
-              defaultValue="1.0"
-              className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-sm font-medium shadow focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[100px]"
-            >
-              <option value="0.5">0.5x</option>
-              <option value="0.75">0.75x</option>
-              <option value="1.0">Normal</option>
-              <option value="1.25">1.25x</option>
-              <option value="1.5">1.5x</option>
-            </select>
-          </div>
-
-          {/* Botón Pantalla Completa */}
-          {lyrics.length > 0 && (
-            <button
-              onClick={handleEnterFullscreen}
-              className="flex flex-col items-center space-y-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition-all duration-200 shadow-lg transform hover:scale-105"
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-              </svg>
-              <span className="text-xs font-medium">Pantalla Completa</span>
-            </button>
-          )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Lyrics Display */}
-      <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-800 dark:to-gray-900 rounded-xl p-4 sm:p-6 shadow-inner min-h-[220px] sm:min-h-[300px] animate-fade-in-up border border-blue-200 dark:border-gray-700">
-        <div className="flex flex-col items-center space-y-3">
-          {lyrics.length === 0 ? (
-            <div className="text-gray-500 dark:text-gray-400 text-center py-8">
-              <svg className="w-12 h-12 mx-auto mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p>No hay letras cargadas</p>
-              <p className="text-sm mt-1">Sube un archivo .lrc o genera letras automáticamente con Whisper</p>
-            </div>
-          ) : (
-            lyrics
-              .slice(
-                Math.max(0, currentLineIndex - 3),
-                Math.min(lyrics.length, currentLineIndex + 4)
-              )
-              .map((line, idx) => {
-                const realIdx = Math.max(0, currentLineIndex - 3) + idx;
-                return (
-                  <div
-                    key={realIdx}
-                    className={`transition-all duration-300 ease-in-out text-center px-4 py-2 rounded-lg ${realIdx === currentLineIndex
-                        ? 'text-xl sm:text-2xl font-bold text-blue-800 dark:text-blue-200 bg-blue-100 dark:bg-blue-900/30 shadow-md transform scale-105 animate-pulse-glow lyric-active'
-                        : realIdx === currentLineIndex - 1 || realIdx === currentLineIndex + 1
-                            ? 'text-lg sm:text-xl text-gray-600 dark:text-gray-300 opacity-80 animate-slide-in'
-                            : 'text-base sm:text-lg text-gray-500 dark:text-gray-400 opacity-60'}`}
-                  >
-                    <p>{line.text}</p>
-                    {line.pronunciation && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{line.pronunciation}</p>
-                    )}
+      {/* Lyrics Display Section */}
+      <div className="relative py-16">
+        <div className="container mx-auto px-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10 shadow-2xl min-h-[400px]">
+              <div className="flex flex-col items-center space-y-6">
+                {lyrics.length === 0 ? (
+                  <div className="text-center py-16">
+                    <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-full flex items-center justify-center">
+                      <svg className="w-12 h-12 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-2">No hay letras cargadas</h3>
+                    <p className="text-blue-200">Sube un archivo de audio o carga letras directamente</p>
                   </div>
-                );
-              })
-          )}
+                ) : (
+                  lyrics
+                    .slice(
+                      Math.max(0, currentLineIndex - 2),
+                      Math.min(lyrics.length, currentLineIndex + 3)
+                    )
+                    .map((line, idx) => {
+                      const realIdx = Math.max(0, currentLineIndex - 2) + idx;
+                      const isActive = realIdx === currentLineIndex;
+                      return (
+                        <div
+                          key={realIdx}
+                          className={`transition-all duration-500 ease-in-out text-center px-6 py-4 rounded-2xl ${
+                            isActive
+                              ? 'bg-gradient-to-r from-yellow-300/20 via-pink-300/20 to-purple-300/20 backdrop-blur-sm border border-yellow-300/30 transform scale-110 shadow-2xl'
+                              : realIdx === currentLineIndex - 1 || realIdx === currentLineIndex + 1
+                              ? 'bg-white/5 backdrop-blur-sm border border-white/10'
+                              : 'bg-white/5 backdrop-blur-sm border border-white/5'
+                          }`}
+                        >
+                          <div className={`${isActive ? 'animate-pulse' : ''}`}>
+                            <p className={`leading-relaxed ${
+                              isActive
+                                ? 'text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-pink-300 to-purple-300'
+                                : realIdx === currentLineIndex - 1 || realIdx === currentLineIndex + 1
+                                ? 'text-xl md:text-2xl text-white/80 opacity-90'
+                                : 'text-lg md:text-xl text-white/60 opacity-70'
+                            }`}>
+                              {line.text}
+                            </p>
+                            {line.pronunciation && (
+                              <p className={`mt-3 ${
+                                isActive 
+                                  ? 'text-xl text-blue-200 font-medium' 
+                                  : 'text-lg text-blue-300'
+                              }`}>
+                                {line.pronunciation}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Upload Section */}
-      <div className="mt-10 p-6 border-2 border-dashed border-blue-300 dark:border-blue-700 rounded-xl text-center bg-white/70 dark:bg-blue-900/40 animate-fade-in-up hover:border-blue-400 dark:hover:border-blue-600 transition-colors">
-        <svg className="w-12 h-12 mx-auto text-blue-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-        </svg>
-        <h3 className="text-lg font-medium text-blue-700 dark:text-blue-200 mb-2">Sube tu canción o archivo SRT</h3>
-        <p className="text-sm text-blue-500 dark:text-blue-300 mb-6">
-          Sube un archivo de audio para generar letras con Whisper, o carga un archivo SRT directamente
-        </p>
-
-        <div className="flex flex-col sm:flex-row gap-4 justify-center flex-wrap">
-          {/* Subir Audio */}
-          <input
-            type="file"
-            accept="audio/*"
-            onChange={handleAudioUpload}
-            className="hidden"
-            id="audio-upload-lrc"
-          />
-          <label htmlFor="audio-upload-lrc" className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in">
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            Elegir archivo de audio
-          </label>
-
-          {/* Cargar archivo SRT */}
-          <input
-            type="file"
-            accept=".srt"
-            onChange={handleSrtFileUpload}
-            className="hidden"
-            id="srt-upload"
-            ref={srtFileInputRef}
-          />
-          <label htmlFor="srt-upload" className="inline-flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in">
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Cargar archivo SRT
-          </label>
-
-
-          {/* Generar Fonética desde letras actuales */}
-          {lyrics.length > 0 && (
-            <button
-              onClick={handleGeneratePhonetic}
-              disabled={isGeneratingPhonetic}
-              className={`inline-flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all duration-200 cursor-pointer text-base shadow hover:shadow-lg transform hover:scale-105 interactive-element animate-bounce-in ${isGeneratingPhonetic ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {isGeneratingPhonetic ? (
-                <>
-                  <svg className="w-5 h-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      <div className="relative py-16">
+        <div className="container mx-auto px-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-8 border border-white/10 shadow-2xl">
+              <div className="text-center mb-8">
+                <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-10 h-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
-                  Generando fonética...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
-                  Generar Fonética
-                </>
-              )}
-            </button>
-          )}
+                </div>
+                <h3 className="text-3xl font-bold text-white mb-4">Sube tu contenido</h3>
+                <p className="text-xl text-blue-200 max-w-2xl mx-auto">
+                  Carga un archivo de audio para generar letras con IA, o sube letras directamente
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Subir Audio */}
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleAudioUpload}
+                  className="hidden"
+                  id="audio-upload-lrc"
+                />
+                <label htmlFor="audio-upload-lrc" className="group flex flex-col items-center p-6 bg-gradient-to-br from-blue-500/20 to-blue-600/20 hover:from-blue-500/30 hover:to-blue-600/30 backdrop-blur-sm border border-blue-400/30 hover:border-blue-400/50 rounded-2xl transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl transform hover:scale-105">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                    <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-semibold text-white mb-2">Archivo de Audio</h4>
+                  <p className="text-sm text-blue-200 text-center">Sube MP3, WAV, etc.</p>
+                </label>
+
+                {/* Cargar archivo SRT */}
+                <input
+                  type="file"
+                  accept=".srt"
+                  onChange={handleSrtFileUpload}
+                  className="hidden"
+                  id="srt-upload"
+                  ref={srtFileInputRef}
+                />
+                <label htmlFor="srt-upload" className="group flex flex-col items-center p-6 bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 hover:from-emerald-500/30 hover:to-emerald-600/30 backdrop-blur-sm border border-emerald-400/30 hover:border-emerald-400/50 rounded-2xl transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl transform hover:scale-105">
+                  <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                    <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-semibold text-white mb-2">Archivo SRT</h4>
+                  <p className="text-sm text-emerald-200 text-center">Letras sincronizadas</p>
+                </label>
+
+
+                {/* Generar Fonética */}
+                {lyrics.length > 0 && (
+                  <button
+                    onClick={handleGeneratePhonetic}
+                    disabled={isGeneratingPhonetic}
+                    className={`group flex flex-col items-center p-6 bg-gradient-to-br from-purple-500/20 to-purple-600/20 hover:from-purple-500/30 hover:to-purple-600/30 backdrop-blur-sm border border-purple-400/30 hover:border-purple-400/50 rounded-2xl transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl transform hover:scale-105 ${isGeneratingPhonetic ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                      {isGeneratingPhonetic ? (
+                        <svg className="w-8 h-8 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                      )}
+                    </div>
+                    <h4 className="text-lg font-semibold text-white mb-2">Generar Fonética</h4>
+                    <p className="text-sm text-purple-200 text-center">
+                      {isGeneratingPhonetic ? 'Procesando...' : 'Pronunciación IA'}
+                    </p>
+                  </button>
+                )}
 
           {/* Botón Whisper - Generar Letras desde MP3 */}
           {whisperServerAvailable && (
@@ -1078,49 +1152,57 @@ const LrcKaraoke: React.FC = () => {
               )}
             </button>
           )}
+              </div>
+
+              {/* Mensaje si el servidor Whisper no está disponible */}
+              {!whisperServerAvailable && (
+                <div className="mt-8 flex items-center gap-3 p-4 bg-amber-500/20 backdrop-blur-sm border border-amber-500/30 rounded-2xl shadow-lg">
+                  <div className="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-amber-200">Servidor Whisper no disponible</p>
+                    <p className="text-sm text-amber-300">
+                      Inicia el servidor para usar transcripción automática.
+                      <button 
+                        className="ml-2 underline font-medium hover:text-amber-100"
+                        onClick={() => checkWhisperServerHealth().then(setWhisperServerAvailable)}
+                      >
+                        Reintentar
+                      </button>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Barra de progreso durante transcripción */}
+              {isTranscribing && (
+                <div className="mt-8">
+                  <div className="flex justify-between text-sm text-blue-200 mb-3">
+                    <span>Transcribiendo audio con Whisper...</span>
+                    <span className="font-semibold">{transcriptionProgress}%</span>
+                  </div>
+                  <div className="w-full h-3 bg-white/20 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-pink-400 to-purple-400 transition-all duration-300"
+                      style={{ width: `${transcriptionProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Componente de resultados fonéticos */}
+              <AiResultDisplay
+                isLoading={isGeneratingPhonetic}
+                phoneticText={phoneticTextResult}
+                onDownload={handleDownloadPhonetic}
+                onReplace={handleReplaceWithPhonetic}
+              />
+            </div>
+          </div>
         </div>
-
-        {/* Mensaje si el servidor Whisper no está disponible */}
-        {!whisperServerAvailable && (
-          <div className="mt-4 flex items-center gap-2 p-3 bg-orange-100 border-l-4 border-orange-500 text-orange-800 rounded-md">
-            <svg className="w-5 h-5 text-orange-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <span className="text-sm">
-              Servidor Whisper no disponible. Inicia el servidor para usar transcripción automática.
-              <a href="#" className="ml-1 underline font-medium" onClick={(e) => {
-                e.preventDefault();
-                checkWhisperServerHealth().then(setWhisperServerAvailable);
-              }}>
-                Reintentar
-              </a>
-            </span>
-          </div>
-        )}
-
-        {/* Barra de progreso durante transcripción */}
-        {isTranscribing && (
-          <div className="mt-4">
-            <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
-              <span>Transcribiendo audio con Whisper...</span>
-              <span>{transcriptionProgress}%</span>
-            </div>
-            <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-300"
-                style={{ width: `${transcriptionProgress}%` }}
-              ></div>
-            </div>
-          </div>
-        )}
-
-        {/* Componente de resultados fonéticos */}
-        <AiResultDisplay
-          isLoading={isGeneratingPhonetic}
-          phoneticText={phoneticTextResult}
-          onDownload={handleDownloadPhonetic}
-          onReplace={handleReplaceWithPhonetic}
-        />
       </div>
 
       {/* Hidden Audio Element */}
